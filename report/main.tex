@@ -1,0 +1,122 @@
+\documentclass[aspectratio=43,10pt]{beamer}
+
+\usetheme{default}
+\usecolortheme{default}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+\setbeamersize{text margin left=0.8cm,text margin right=0.8cm}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath}
+
+\definecolor{nofegreen}{HTML}{1B7837}
+\setbeamercolor{frametitle}{fg=nofegreen}
+\setbeamercolor{title}{fg=nofegreen}
+\setbeamercolor{itemize item}{fg=nofegreen}
+
+\title{NOFE for 3D seismic volume \& depth-Log Reduction}
+\subtitle{Operator generalisation, seamless stitching and stress tests on Netherlands F3}
+\author{Boye \& co.}
+\date{\today}
+
+\begin{document}
+
+\begin{frame}[plain]
+  \titlepage
+\end{frame}
+
+\begin{frame}{Motivation \& experimental setup}
+  \begin{itemize}
+    \item \textbf{Dataset:} Full Netherlands F3 seismic cube ($601 \times 901 \times 253$ after boundary trimming).
+    \item \textbf{Two evaluation settings:}
+      \begin{enumerate}
+        \item \textbf{2D Depth-Log Compression:} Compress 253-sample vertical logs per trace into 8D embeddings.
+        \item \textbf{3D Volume Reduction:} Compress 11-channel 3D seismic attributes into 8D volumetric embeddings.
+      \end{enumerate}
+    \item \textbf{Baselines:} \texttt{PCA-8D} (linear) and \texttt{UMAP-8D} (transductive/non-parametric).
+    \item \textbf{Key question:} Does a continuous graph/operator embedding (\texttt{NOFE-8D}) avoid seam artefacts, out-of-sample speckle, and density shift?
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Multi-axis stress-test overview}
+  \centering
+  \includegraphics[width=\linewidth,height=0.66\textheight,keepaspectratio]{./solutions/figA_nofe_radar_overview.png}
+  \vspace{0.4em}
+  \begin{itemize}
+    \item \texttt{NOFE-8D} preserves local geometry and eliminates tile-stitching failure ($0.10$ vs.\ $1.33$ for \texttt{PCA-8D} and $1.49$ for \texttt{UMAP-8D}).
+    \item Maintains Pearson $r \ge 0.990$ across $9\times$--$36\times$ sampling-density shifts.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{2D depth-log compression ($253 \to 8$ dimensions)}
+  \centering
+  \includegraphics[width=\linewidth,height=0.58\textheight,keepaspectratio]{./solutions/fig1_depth_compression_8d_bars.png}
+  \vspace{0.5em}
+  \begin{itemize}
+    \item Lowest \textbf{local spatial stress} ($0.258$ vs.\ $0.374$ PCA, $0.791$ UMAP) and \textbf{global stress} ($0.236$).
+    \item Highest nonlinear depth-log reconstruction $R^2$ ($0.339$) with high neighbourhood continuity ($0.953$).
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Continuous operator properties: stitching \& density transfer}
+  \centering
+  \includegraphics[width=\linewidth,height=0.58\textheight,keepaspectratio]{./solutions/fig2_operator_generalization.png}
+  \vspace{0.5em}
+  \begin{itemize}
+    \item \textbf{Patch stitching:} $0.137$ norm-RMSE vs.\ $>1.52$ for independent \texttt{PCA-8D} / \texttt{UMAP-8D} tiles.
+    \item \textbf{Zero-shot $9\times$ density transfer} ($3\times 3 \to 1\times 1$, mean degree $27.3 \to 248.1$): $r = 0.9949$.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{4-quadrant survey stitching (visual proof)}
+  \centering
+  \includegraphics[width=\linewidth,height=0.60\textheight,keepaspectratio]{./solutions/figB_4tile_mosaic_seams.png}
+  \vspace{0.5em}
+  \begin{itemize}
+    \item Four independently processed quadrants joined along dashed boundaries.
+    \item \texttt{NOFE-8D} is visually seamless across tile borders (mean seam norm-RMSE $0.103$ vs.\ $1.328$ / $1.489$).
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Out-of-sample generalisation across held-out inlines}
+  \centering
+  \includegraphics[width=\linewidth,height=0.60\textheight,keepaspectratio]{./solutions/fig3_out_of_sample_visual_proof.png}
+  \vspace{0.5em}
+  \begin{itemize}
+    \item Trained on inlines $<450$; evaluated out-of-sample on inlines $450$--$600$ (below dashed line).
+    \item \texttt{NOFE-8D} extends geological structure smoothly, whereas \texttt{UMAP-8D} exhibits out-of-sample speckle.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Noise robustness \& multi-density stress curve}
+  \centering
+  \includegraphics[width=\linewidth,height=0.68\textheight,keepaspectratio]{./solutions/figC_noise_and_density_stress.png}
+  \vspace{0.3em}
+  \begin{itemize}
+    \item Clean-target local stress stays stable under trace noise ($\sigma \in [0, 1.0]$); zero-shot transfer tracks native $1\times 1$ from $6\times 6$ upwards.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Zero-shot native-resolution salt diapir zoom}
+  \centering
+  \includegraphics[width=\linewidth,height=0.58\textheight,keepaspectratio]{./solutions/figE_salt_dome_native_zoom.png}
+  \vspace{0.5em}
+  \begin{itemize}
+    \item $300 \times 450 = 135{,}000$ traces evaluated zero-shot at native $1\times 1$ spacing.
+    \item Embedding gradient $\|\nabla z\|$ sharpens salt-diapir flanks and facies boundaries (Boundary AUC $= 0.667$).
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{3D volumetric reduction \& latent manifold}
+  \centering
+  \includegraphics[width=\linewidth,height=0.65\textheight,keepaspectratio]{./solutions/figD_3d_cube_and_manifold.png}
+  \vspace{0.3em}
+  \begin{itemize}
+    \item 3D \texttt{NOFE-8D} achieves $0.064$ held-out local stress (vs.\ $0.390$ for \texttt{UMAP-8D}) and clean stratigraphic continuity across orthogonal slices.
+  \end{itemize}
+\end{frame}
+
+\end{document}
