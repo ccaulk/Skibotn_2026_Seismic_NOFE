@@ -1,0 +1,67 @@
+[project]
+name = "nofe-seismic"
+version = "0.1.0"
+description = "NOFE dimensionality reduction experiments on 3D seismic data (F3 block)."
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "matplotlib>=3.9",
+    "nofe @ git+https://github.com/laueb4818/workshop-skibotn.git",
+    "numpy>=2.0",
+    "pandas>=2.2",
+    "scikit-learn>=1.5",
+    "scipy>=1.13",
+    "torch>=2.6,<3",
+    "torch-geometric>=2.6",
+    "umap-learn>=0.5.7",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.14.7",
+    "ty>=0.0.44",
+]
+
+[build-system]
+requires = ["uv_build>=0.11,<0.14"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+pythonpath = ["."]
+markers = [
+    "slow: unusually slow; `just verify` and the commit hook skip these, `just check` runs them",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["src"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+target-version = "py311"
+extend-exclude = ["f3-full"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "D",      # docstrings
+    "EM",     # exception message strings
+    "TRY003",
+    "TC",     # type-checking import blocks
+    "T201",   # print
+    "COM812",
+    "PLR0913",
+    "N812",   # functional as F (conventional)
+    "FBT003",
+    "CPY001", # copyright notices (enabled under ALL in ruff 0.17+)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/*" = ["INP001"]
+"tests/*" = ["S101", "N", "SLF001", "PLR2004", "ANN"]
