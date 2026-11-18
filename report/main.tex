@@ -17,8 +17,8 @@
 \setbeamercolor{title}{fg=nofegreen}
 \setbeamercolor{itemize item}{fg=nofegreen}
 
-\title{NOFE for 3D seismic volume \& depth-Log Reduction}
-\subtitle{Operator generalisation, seamless stitching and stress tests on Netherlands F3}
+\title{NOFE for 3D seismic volume \& depth-log reduction}
+\subtitle{Operator generalisation, latent-dimension ablations and facies separation on Netherlands F3}
 \author{Boye \& co.}
 \date{\today}
 
@@ -33,11 +33,11 @@
     \item \textbf{Dataset:} Full Netherlands F3 seismic cube ($601 \times 901 \times 253$ after boundary trimming).
     \item \textbf{Two evaluation settings:}
       \begin{enumerate}
-        \item \textbf{2D Depth-Log Compression:} Compress 253-sample vertical logs per trace into 8D embeddings.
-        \item \textbf{3D Volume Reduction:} Compress 11-channel 3D seismic attributes into 8D volumetric embeddings.
+        \item \textbf{2D depth-log compression:} Compress 253-sample vertical logs per trace into compact spatial embeddings ($d \in \{2, 3, 4, 8, 16, 32\}$).
+        \item \textbf{3D volume reduction:} Compress 3D seismic attributes into volumetric embeddings for stratigraphy and facies analysis.
       \end{enumerate}
-    \item \textbf{Baselines:} \texttt{PCA-8D} (linear) and \texttt{UMAP-8D} (transductive/non-parametric).
-    \item \textbf{Key question:} Does a continuous graph/operator embedding (\texttt{NOFE-8D}) avoid seam artefacts, out-of-sample speckle, and density shift?
+    \item \textbf{Baselines:} \texttt{PCA} (linear) and \texttt{UMAP} (transductive/non-parametric).
+    \item \textbf{Key questions:} Does a continuous graph-kernel operator (\texttt{NOFE}) avoid seam artefacts, out-of-sample speckle and density shift? Which latent dimension and graph design best separate seismic facies?
   \end{itemize}
 \end{frame}
 
@@ -47,7 +47,7 @@
   \vspace{0.4em}
   \begin{itemize}
     \item \texttt{NOFE-8D} preserves local geometry and eliminates tile-stitching failure ($0.10$ vs.\ $1.33$ for \texttt{PCA-8D} and $1.49$ for \texttt{UMAP-8D}).
-    \item Maintains Pearson $r \ge 0.987$ across $9\times$--$36\times$ sampling-density shifts.
+    \item Maintains Pearson $r \ge 0.990$ across $9\times$--$36\times$ sampling-density shifts.
   \end{itemize}
 \end{frame}
 
@@ -56,38 +56,18 @@
   \includegraphics[width=\linewidth,height=0.58\textheight,keepaspectratio]{./solutions/fig1_depth_compression_8d_bars.png}
   \vspace{0.5em}
   \begin{itemize}
-    \item Lowest \textbf{local spatial stress} ($0.255$ vs.\ $0.374$ PCA, $0.791$ UMAP) and \textbf{global stress} ($0.232$).
-    \item Nonlinear depth-log reconstruction $R^2 = 0.306$ (matching \texttt{PCA-8D} $0.308$, above \texttt{UMAP-8D} $0.293$) with high neighbourhood continuity ($0.956$).
+    \item Lowest \textbf{local spatial stress} ($0.258$ vs.\ $0.374$ PCA and $0.791$ UMAP) and \textbf{global stress} ($0.236$).
+    \item Highest nonlinear depth-log reconstruction $R^2$ ($0.339$) with high neighbourhood continuity ($0.953$).
   \end{itemize}
 \end{frame}
 
-\begin{frame}{Continuous operator properties: stitching \& density transfer}
-  \centering
-  \includegraphics[width=\linewidth,height=0.58\textheight,keepaspectratio]{./solutions/fig2_operator_generalization.png}
-  \vspace{0.5em}
-  \begin{itemize}
-    \item \textbf{Patch stitching:} $0.127$ norm-RMSE vs.\ $>1.56$ for independent \texttt{PCA-8D} / \texttt{UMAP-8D} tiles.
-    \item \textbf{Zero-shot $9\times$ density transfer} ($3\times 3 \to 1\times 1$, mean degree $27.3 \to 248.1$): $r = 0.9951$.
-  \end{itemize}
-\end{frame}
-
-\begin{frame}{4-quadrant survey stitching (visual proof)}
+\begin{frame}{Four-quadrant survey stitching (visual proof)}
   \centering
   \includegraphics[width=\linewidth,height=0.60\textheight,keepaspectratio]{./solutions/figB_4tile_mosaic_seams.png}
   \vspace{0.5em}
   \begin{itemize}
     \item Four independently processed quadrants joined along dashed boundaries.
-    \item \texttt{NOFE-8D} is visually seamless across tile borders (mean seam norm-RMSE $0.103$ vs.\ $1.328$ / $1.489$).
-  \end{itemize}
-\end{frame}
-
-\begin{frame}{Out-of-sample generalisation across held-out inlines}
-  \centering
-  \includegraphics[width=\linewidth,height=0.60\textheight,keepaspectratio]{./solutions/fig3_out_of_sample_visual_proof.png}
-  \vspace{0.5em}
-  \begin{itemize}
-    \item Trained on inlines $<450$; evaluated out-of-sample on inlines $450$--$600$ (below dashed line).
-    \item \texttt{NOFE-8D} extends geological structure smoothly, whereas \texttt{UMAP-8D} exhibits out-of-sample speckle.
+    \item \texttt{NOFE-8D} is visually seamless across tile borders (mean seam norm-RMSE $0.103$ vs.\ $1.328$ for \texttt{PCA-8D} and $1.489$ for \texttt{UMAP-8D}).
   \end{itemize}
 \end{frame}
 
@@ -100,22 +80,71 @@
   \end{itemize}
 \end{frame}
 
-\begin{frame}{Zero-shot native-resolution salt diapir zoom}
+\begin{frame}{Latent-dimension ablations ($d = 2$ to $32$)}
+  \centering
+  \includegraphics[width=\linewidth,height=0.62\textheight,keepaspectratio]{./solutions/ablation_latent_dim.png}
+  \vspace{0.3em}
+  \begin{itemize}
+    \item \texttt{NOFE} achieves the lowest local spatial stress across $d = 2$--$16$ ($0.197$ at 8D and $0.136$ at 16D vs.\ $0.717$ for \texttt{UMAP}).
+    \item Pareto elbows at \textbf{8D} ($31.6\times$ compression, $88.9\%$ 7-NN facies accuracy) and \textbf{16D} ($15.8\times$, $94.4\%$ accuracy, $0.765$ thickness $R^2$).
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Trace-level depth-log fidelity \& unsupervised clusters}
+  \centering
+  \includegraphics[width=\linewidth,height=0.62\textheight,keepaspectratio]{./solutions/trace_profiles_and_clusters.png}
+  \vspace{0.3em}
+  \begin{itemize}
+    \item Reconstructed 2D codes track reflector peaks and unconformity transitions across shelf, Chalk flank and Zechstein diapir logs.
+    \item Unsupervised $k$-means ($k=6$) on \texttt{NOFE-16D} recovers the salt diapir and basin geometry without any geological labels.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Multi-scale 2D maps \& 3D cross-section alignment}
+  \centering
+  \includegraphics[width=\linewidth,height=0.62\textheight,keepaspectratio]{./solutions/multiscale_maps_cross_section.png}
+  \vspace{0.3em}
+  \begin{itemize}
+    \item Increasing latent dimension from $3$D ($84.3\times$) to $16$D ($15.8\times$) sharpens fault and diapir boundaries on the $601 \times 901$ map.
+    \item On \texttt{Inline 300}, 1-hop anisotropic 3D \texttt{NOFE-16D} replaces high-frequency phase striping with coherent stratigraphic beds.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Improving 3D facies separation}
+  \centering
+  \includegraphics[width=\linewidth,height=0.60\textheight,keepaspectratio]{./solutions/facies_separation_breakthrough.png}
+  \vspace{0.3em}
+  \begin{itemize}
+    \item \textbf{Three fixes:} 1-hop operator (\texttt{depth=1}), vertical anisotropy (\texttt{pos\_weights=(1,1,2)}) and phase-invariant texture + depth (\texttt{tex7+z}).
+    \item Lifts balanced accuracy from $0.368$ (naive \texttt{NOFE-8D}) to $0.536$ (\texttt{16D}) and $0.654$ (\texttt{32D}, macro-F1 $0.559$, Scruff recall $10\% \to 41\%$).
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Facies-aware 3D cutaway \& latent manifold}
+  \centering
+  \includegraphics[width=\linewidth,height=0.65\textheight,keepaspectratio]{./solutions/hero_3d_cutaway_facies.png}
+  \vspace{0.3em}
+  \begin{itemize}
+    \item Tuned 3D \texttt{NOFE-16D} achieves $0.041$ held-out local stress ($0.025$ at 32D vs.\ $0.427$ for \texttt{UMAP}) with clear stratigraphic ordering across orthogonal slices.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Zero-shot native-resolution salt-diapir zoom}
   \centering
   \includegraphics[width=\linewidth,height=0.58\textheight,keepaspectratio]{./solutions/figE_salt_dome_native_zoom.png}
   \vspace{0.5em}
   \begin{itemize}
     \item $300 \times 450 = 135{,}000$ traces evaluated zero-shot at native $1\times 1$ spacing.
-    \item Embedding gradient $\|\nabla z\|$ sharpens salt-diapir flanks and facies boundaries (Boundary AUC $= 0.663$).
+    \item Embedding gradient $\|\nabla z\|$ sharpens salt-diapir flanks and facies boundaries (boundary AUC $= 0.667$).
   \end{itemize}
 \end{frame}
 
-\begin{frame}{3D volumetric reduction \& latent manifold}
-  \centering
-  \includegraphics[width=\linewidth,height=0.65\textheight,keepaspectratio]{./solutions/figD_3d_cube_and_manifold.png}
-  \vspace{0.3em}
+\begin{frame}{Summary \& practical takeaways}
   \begin{itemize}
-    \item 3D \texttt{NOFE-8D} achieves $0.064$ held-out local stress (vs.\ $0.390$ for \texttt{UMAP-8D}) and clean stratigraphic continuity across orthogonal slices.
+    \item \textbf{Continuous operator advantage:} \texttt{NOFE} eliminates tile-stitching seams ($0.103$ vs.\ $>1.32$) and transfers zero-shot across $9\times$--$36\times$ sampling changes ($r \ge 0.990$).
+    \item \textbf{Latent-dimension sweet spots:} \texttt{8D} ($31.6\times$) suffices for compact mapping; \texttt{16D} ($15.8\times$) unlocks high trace reconstruction ($R^2 = 0.756$) and $94.4\%$ facies accuracy.
+    \item \textbf{Facies separation recipe:} Avoiding 2-hop boundary smoothing (\texttt{depth=1}) with anisotropic bedding graphs lifts 3D balanced accuracy by $+0.286$ (to $0.654$).
+    \item \textbf{Trade-off:} Global linear probes require sufficient latent capacity ($16$D--$32$D) and in-domain spatial coordinates; future work can add multi-scale global anchors without breaking local edge normalisation.
   \end{itemize}
 \end{frame}
 
