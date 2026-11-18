@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import NamedTuple
+
 import numpy as np
 import torch
 from scipy.spatial.distance import cdist
@@ -13,6 +15,17 @@ from sklearn.metrics import (
 )
 
 _EPS = 1e-12
+
+
+class _ArrayPair(NamedTuple):
+    x: np.ndarray
+    z: np.ndarray
+
+
+class _EdgeMoments(NamedTuple):
+    sum_dx2: float
+    sum_dz2: float
+    sum_dxdz: float
 
 
 def norm_rmse(pred: np.ndarray, ref: np.ndarray) -> float:
@@ -40,6 +53,28 @@ def _rank_matrix(dist_matrix: np.ndarray) -> np.ndarray:
     return ranks
 
 
+def _subsample_pair(
+    x: np.ndarray, z: np.ndarray, *, sample_size: int, seed: int
+) -> _ArrayPair:
+    if x.shape[0] <= sample_size:
+        return _ArrayPair(x, z)
+    idx = np.random.default_rng(seed).choice(
+        x.shape[0], size=sample_size, replace=False
+    )
+    return _ArrayPair(x[idx], z[idx])
+
+
+def _kruskal_stress(dx: np.ndarray, dz: np.ndarray) -> float:
+    tri = np.triu_indices(dx.shape[0], k=1)
+    vx, vz = dx[tri], dz[tri]
+    denom_z = float(np.dot(vz, vz))
+    alpha = float(np.dot(vx, vz) / denom_z) if denom_z > _EPS else 0.0
+    denom_x = float(np.dot(vx, vx))
+    if denom_x <= _EPS:
+        return 0.0
+    return float(np.sqrt(np.sum((vx - alpha * vz) ** 2) / denom_x))
+
+
 def neighborhood_metrics(
     features: np.ndarray | torch.Tensor,
     embedding: np.ndarray | torch.Tensor,
@@ -48,69 +83,59 @@ def neighborhood_metrics(
     sample_size: int = 4000,
     seed: int = 42,
 ) -> dict[str, float]:
-    """Compute Trustworthiness, Continuity, k-NN recall and global Stress.
-
-    Evaluated on a deterministic node subsample when ``N > sample_size`` so
-    pairwise rank matrices stay fast across methods.
-    """
-    x = _to_numpy(features)
-    z = _to_numpy(embedding)
-    if x.shape[0] != z.shape[0]:
-        raise ValueError(f"Row mismatch: features={x.shape[0]}, embedding={z.shape[0]}")
-
-    n_total = x.shape[0]
-    if n_total > sample_size:
-        idx = np.random.default_rng(seed).choice(
-            n_total, size=sample_size, replace=False
+    """Compute Trustworthiness, Continuity, k-NN recall and global Stress."""
+    x_raw, z_raw = _to_numpy(features), _to_numpy(embedding)
+    if x_raw.shape[0] != z_raw.shape[0]:
+        raise ValueError(
+            f"Row mismatch: features={x_raw.shape[0]}, embedding={z_raw.shape[0]}"
         )
-        x = x[idx]
-        z = z[idx]
 
+    x, z = _subsample_pair(x_raw, z_raw, sample_size=sample_size, seed=seed)
     n = x.shape[0]
     if n <= k + 1:
         raise ValueError(f"Need n > k + 1, got n={n}, k={k}")
 
     dx = cdist(x, x, metric="euclidean")
     dz = cdist(z, z, metric="euclidean")
+    rx, rz = _rank_matrix(dx), _rank_matrix(dz)
+    nn_x, nn_z = rx <= k, rz <= k
 
-    rx = _rank_matrix(dx)
-    rz = _rank_matrix(dz)
-
-    nn_x = rx <= k
-    nn_z = rz <= k
-
-    # Trustworthiness penalises false neighbours in Z that were distant in X.
-    intruding = nn_z & (~nn_x)
-    trust_pen = np.sum((rx - k) * intruding)
-    # Continuity penalises true neighbours in X that became distant in Z.
-    missing = nn_x & (~nn_z)
-    cont_pen = np.sum((rz - k) * missing)
-
+    trust_pen = np.sum((rx - k) * (nn_z & (~nn_x)))
+    cont_pen = np.sum((rz - k) * (nn_x & (~nn_z)))
     norm = n * k * (2 * n - 3 * k - 1)
     trustworthiness = float(1.0 - (2.0 / norm) * trust_pen) if norm > 0 else 1.0
     continuity = float(1.0 - (2.0 / norm) * cont_pen) if norm > 0 else 1.0
-    knn_recall = float(np.sum(nn_x & nn_z) / (n * k))
-
-    # Scale-aligned Kruskal Stress-1 over upper-triangle pairs.
-    tri = np.triu_indices(n, k=1)
-    vx = dx[tri]
-    vz = dz[tri]
-    denom_z = float(np.dot(vz, vz))
-    alpha = float(np.dot(vx, vz) / denom_z) if denom_z > _EPS else 0.0
-    denom_x = float(np.dot(vx, vx))
-    global_stress = (
-        float(np.sqrt(np.sum((vx - alpha * vz) ** 2) / denom_x))
-        if denom_x > _EPS
-        else 0.0
-    )
 
     return {
         "trustworthiness": trustworthiness,
         "continuity": continuity,
-        "knn_recall": knn_recall,
-        "global_stress": global_stress,
+        "knn_recall": float(np.sum(nn_x & nn_z) / (n * k)),
+        "global_stress": _kruskal_stress(dx, dz),
         "eval_nodes": float(n),
     }
+
+
+def _accumulate_edge_moments(
+    x: np.ndarray,
+    z: np.ndarray,
+    src: np.ndarray,
+    dst: np.ndarray,
+    *,
+    chunk_size: int,
+) -> _EdgeMoments:
+    sum_dx2 = 0.0
+    sum_dz2 = 0.0
+    sum_dxdz = 0.0
+    num_edges = src.shape[0]
+    for start in range(0, num_edges, chunk_size):
+        stop = min(start + chunk_size, num_edges)
+        s, d = src[start:stop], dst[start:stop]
+        dx = np.linalg.norm(x[s] - x[d], axis=1)
+        dz = np.linalg.norm(z[s] - z[d], axis=1)
+        sum_dx2 += float(np.dot(dx, dx))
+        sum_dz2 += float(np.dot(dz, dz))
+        sum_dxdz += float(np.dot(dx, dz))
+    return _EdgeMoments(sum_dx2=sum_dx2, sum_dz2=sum_dz2, sum_dxdz=sum_dxdz)
 
 
 def local_graph_metrics(
@@ -120,9 +145,8 @@ def local_graph_metrics(
     *,
     chunk_size: int = 1_000_000,
 ) -> dict[str, float]:
-    """Evaluate local scale-aligned Stress and spatial smoothness along graph edges."""
-    x = _to_numpy(features)
-    z = _to_numpy(embedding)
+    """Evaluate local scale-aligned Stress and spatial smoothness along edges."""
+    x, z = _to_numpy(features), _to_numpy(embedding)
     ei = (
         edge_index.detach().cpu().numpy()
         if isinstance(edge_index, torch.Tensor)
@@ -137,30 +161,17 @@ def local_graph_metrics(
             "relative_edge_variation": 0.0,
         }
 
-    sum_dx2 = 0.0
-    sum_dz2 = 0.0
-    sum_dxdz = 0.0
-    for start in range(0, num_edges, chunk_size):
-        stop = min(start + chunk_size, num_edges)
-        s, d = src[start:stop], dst[start:stop]
-        dx = np.linalg.norm(x[s] - x[d], axis=1)
-        dz = np.linalg.norm(z[s] - z[d], axis=1)
-        sum_dx2 += float(np.dot(dx, dx))
-        sum_dz2 += float(np.dot(dz, dz))
-        sum_dxdz += float(np.dot(dx, dz))
-
-    alpha = sum_dxdz / sum_dz2 if sum_dz2 > _EPS else 0.0
-    if sum_dx2 > _EPS:
-        # ||dx - alpha*dz||^2 = sum_dx2 - 2*alpha*sum_dxdz + alpha^2*sum_dz2
-        resid2 = max(0.0, sum_dx2 - 2.0 * alpha * sum_dxdz + (alpha**2) * sum_dz2)
-        local_stress = float(np.sqrt(resid2 / sum_dx2))
+    m = _accumulate_edge_moments(x, z, src, dst, chunk_size=chunk_size)
+    alpha = m.sum_dxdz / m.sum_dz2 if m.sum_dz2 > _EPS else 0.0
+    if m.sum_dx2 > _EPS:
+        resid2 = max(0.0, m.sum_dx2 - 2.0 * alpha * m.sum_dxdz + (alpha**2) * m.sum_dz2)
+        local_stress = float(np.sqrt(resid2 / m.sum_dx2))
     else:
         local_stress = 0.0
 
-    edge_rms = float(np.sqrt(sum_dz2 / num_edges))
+    edge_rms = float(np.sqrt(m.sum_dz2 / num_edges))
     global_rms = float(np.sqrt(np.mean(np.sum((z - z.mean(axis=0)) ** 2, axis=1))))
     rel_variation = edge_rms / global_rms if global_rms > _EPS else 0.0
-
     return {
         "local_stress": local_stress,
         "edge_embed_rms": edge_rms,
@@ -176,7 +187,7 @@ def evaluate_clustering(
     silhouette_sample: int = 10_000,
     seed: int = 42,
 ) -> list[dict[str, float | int]]:
-    """Run K-Means sweep on embeddings and compute internal + label-aligned scores."""
+    """Run K-Means sweep on embeddings and compute internal + label scores."""
     z = _to_numpy(embedding)
     labels_arr = np.asarray(labels).reshape(-1) if labels is not None else None
     valid_mask = labels_arr >= 0 if labels_arr is not None else None

@@ -5,39 +5,55 @@ from __future__ import annotations
 import argparse
 import json
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
-from nofe_seismic.data import (
+from nofe_seismic.data.synthetic import make_synthetic_seismic_cube
+from nofe_seismic.data.volumes import (
     LazySeismicVolume,
     SeismicVolume,
     load_f3_directory,
-    make_synthetic_seismic_cube,
 )
-from nofe_seismic.experiments import ExperimentConfig, run_all_experiments
+from nofe_seismic.experiments.evals import ExperimentConfig
+from nofe_seismic.experiments.suite import run_all_experiments
+from nofe_seismic.types import Stride3D, VolumeShape
 
 _DENSE_ABLATION_MAX_INLINES = 300
 _TRIPLE_LEN = 3
+_DEFAULT_SYNTHETIC_STRIDE = Stride3D(1, 1, 1)
+_DEFAULT_F3_STRIDE = Stride3D(4, 4, 2)
 
 
-def _parse_triple(values: Sequence[int]) -> tuple[int, int, int]:
+@dataclass(frozen=True)
+class _LoadedExperiment:
+    volume: SeismicVolume | LazySeismicVolume
+    config: ExperimentConfig
+
+
+def _parse_stride(values: Sequence[int]) -> Stride3D:
     if len(values) != _TRIPLE_LEN:
         raise ValueError(f"Expected 3 integers, got {len(values)}")
-    return int(values[0]), int(values[1]), int(values[2])
+    return Stride3D(int(values[0]), int(values[1]), int(values[2]))
+
+
+def _parse_shape(values: Sequence[int]) -> VolumeShape:
+    if len(values) != _TRIPLE_LEN:
+        raise ValueError(f"Expected 3 integers, got {len(values)}")
+    return VolumeShape(int(values[0]), int(values[1]), int(values[2]))
 
 
 def _auto_stride(
-    shape: tuple[int, int, int],
+    shape: VolumeShape,
     *,
     target_train_nodes: int = 85_000,
     train_frac: float = 0.75,
-) -> tuple[int, int, int]:
-    ni, nx, nz = shape
-    ni_train = max(8, round(ni * train_frac))
+) -> Stride3D:
+    ni_train = max(8, round(shape.ni * train_frac))
     si = sx = sz = 1
-    while ((ni_train + si - 1) // si) * ((nx + sx - 1) // sx) * (
-        (nz + sz - 1) // sz
+    while ((ni_train + si - 1) // si) * ((shape.nx + sx - 1) // sx) * (
+        (shape.nz + sz - 1) // sz
     ) > target_train_nodes:
-        lens = (ni_train / si, nx / sx, nz / sz)
+        lens = (ni_train / si, shape.nx / sx, shape.nz / sz)
         idx = max(range(3), key=lambda k: lens[k])
         if idx == 0:
             si += 1
@@ -45,22 +61,17 @@ def _auto_stride(
             sx += 1
         else:
             sz += 1
-    return si, sx, sz
+    return Stride3D(si, sx, sz)
 
 
-def _load_volume_and_config(
-    args: argparse.Namespace,
-) -> tuple[SeismicVolume | LazySeismicVolume, ExperimentConfig]:
+def _load_volume_and_config(args: argparse.Namespace) -> _LoadedExperiment:
     if args.dataset == "synthetic":
         volume: SeismicVolume | LazySeismicVolume = make_synthetic_seismic_cube(
-            _parse_triple(args.shape), seed=args.seed
+            _parse_shape(args.shape), seed=args.seed
         )
         default_out = Path("outputs/synthetic")
-        default_radius = 0.25
-        default_nystrom = 0.25
-        default_epochs = 80
-        default_slice_stride = (1, 1, 1)
-        default_slab = 2
+        default_radius, default_nystrom, default_epochs = 0.25, 0.25, 80
+        default_slice_stride, default_slab = _DEFAULT_SYNTHETIC_STRIDE, 2
         include_dense = not args.skip_dense_ablation
     else:
         volumes = load_f3_directory(args.data_dir)
@@ -75,34 +86,29 @@ def _load_volume_and_config(
             )
         volume = volumes[split_name]
         default_out = Path(f"outputs/f3_{split_name}")
-        default_radius = 0.15
-        default_nystrom = 0.15
-        default_epochs = 60
-        default_slice_stride = (4, 4, 2)
-        default_slab = 0
+        default_radius, default_nystrom, default_epochs = 0.15, 0.15, 60
+        default_slice_stride, default_slab = _DEFAULT_F3_STRIDE, 0
         include_dense = (
             False
             if args.skip_dense_ablation
-            else volume.shape[0] < _DENSE_ABLATION_MAX_INLINES
+            else volume.shape.ni < _DENSE_ABLATION_MAX_INLINES
         )
 
-    stride = (
-        _parse_triple(args.stride)
-        if args.stride is not None
-        else _auto_stride(volume.shape)
-    )
-    slice_stride = (
-        _parse_triple(args.slice_stride)
-        if args.slice_stride is not None
-        else default_slice_stride
-    )
     nystrom_val = args.nystrom if args.nystrom is not None else default_nystrom
     cfg = ExperimentConfig(
         out_dir=args.out_dir if args.out_dir is not None else default_out,
         device=args.device,
         seed=args.seed,
-        train_stride=stride,
-        slice_stride=slice_stride,
+        train_stride=(
+            _parse_stride(args.stride)
+            if args.stride is not None
+            else _auto_stride(volume.shape)
+        ),
+        slice_stride=(
+            _parse_stride(args.slice_stride)
+            if args.slice_stride is not None
+            else default_slice_stride
+        ),
         slab_half_width=(
             args.slab_half_width if args.slab_half_width is not None else default_slab
         ),
@@ -111,10 +117,10 @@ def _load_volume_and_config(
         epochs=args.epochs if args.epochs is not None else default_epochs,
         include_dense_ablation=include_dense,
     )
-    return volume, cfg
+    return _LoadedExperiment(volume=volume, config=cfg)
 
 
-def main() -> None:
+def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset", choices=("synthetic", "f3"), default="synthetic")
     parser.add_argument("--data-dir", type=Path, default=Path("f3-full"))
@@ -132,11 +138,13 @@ def main() -> None:
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--skip-dense-ablation", action="store_true")
     parser.add_argument("--seed", type=int, default=42)
-    args = parser.parse_args()
+    return parser.parse_args()
 
-    volume, cfg = _load_volume_and_config(args)
-    summary = run_all_experiments(volume, cfg)
-    print(f"Saved outputs to {cfg.out_dir}")
+
+def main() -> None:
+    loaded = _load_volume_and_config(_parse_args())
+    summary = run_all_experiments(loaded.volume, loaded.config)
+    print(f"Saved outputs to {loaded.config.out_dir}")
     print(
         json.dumps(
             {

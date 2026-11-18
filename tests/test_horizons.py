@@ -6,22 +6,26 @@ from pathlib import Path
 
 import numpy as np
 
-from nofe_seismic.data import make_synthetic_seismic_cube
-from nofe_seismic.horizon_pipeline import run_horizon_reconstruction
-from nofe_seismic.horizons import (
-    HorizonConfig,
-    coupled_monotonic_boundaries_2d,
-    discover_horizons_from_rgt,
-    estimate_structure_tensor_2d,
+from nofe_seismic.data.synthetic import make_synthetic_seismic_cube
+from nofe_seismic.horizons.boundaries import (
     evaluate_horizon_curve,
     extract_boundary_ridges,
-    extract_horizon_iso_rgt,
-    extract_surface_iso_rgt_3d,
     extract_transition_depths,
     extract_true_interfaces,
     extract_unit_top_depths,
-    monotonic_dp_boundaries,
     multiscale_boundary_contrast,
+)
+from nofe_seismic.horizons.config import HorizonConfig
+from nofe_seismic.horizons.dp import (
+    coupled_monotonic_boundaries_2d,
+    monotonic_dp_boundaries,
+)
+from nofe_seismic.horizons.pipeline import run_horizon_reconstruction
+from nofe_seismic.horizons.rgt import (
+    discover_horizons_from_rgt,
+    estimate_structure_tensor_2d,
+    extract_horizon_iso_rgt,
+    extract_surface_iso_rgt_3d,
     rgt_aligned_smooth,
     solve_rgt_2d,
     solve_rgt_3d,
@@ -86,7 +90,7 @@ def test_rgt_recovers_dipping_horizon_2d_and_3d() -> None:
         rgt, contrast, field.coherency, num_horizons=1, min_sep=6
     )
     assert len(disc) == 1
-    assert np.abs(disc[0]["depths"] - (14.0 + true_slope * np.arange(nu))).mean() < 1.5
+    assert np.abs(disc[0].depths - (14.0 + true_slope * np.arange(nu))).mean() < 1.5
 
     ni, nx, nz3 = 10, 10, 30
     ii, xx, zz3 = np.meshgrid(
@@ -177,5 +181,9 @@ def test_run_horizon_reconstruction_smoke(tmp_path: Path) -> None:
         p = cfg.out_dir / "figures" / fig_name
         assert p.exists()
         assert p.stat().st_size > 1024
-    assert summary["train_graph"]["num_nodes"] > 0
-    assert summary["tile_seam_consistency"]["shared_interior_points"] > 0
+    train_graph = summary["train_graph"]
+    seam = summary["tile_seam_consistency"]
+    assert isinstance(train_graph, dict)
+    assert isinstance(seam, dict)
+    assert train_graph["num_nodes"] > 0
+    assert seam["shared_interior_points"] > 0

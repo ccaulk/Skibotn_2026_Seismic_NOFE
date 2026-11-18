@@ -2,8 +2,9 @@
 
 from pathlib import Path
 
-from nofe_seismic.data import make_synthetic_seismic_cube
-from nofe_seismic.experiments import ExperimentConfig, run_all_experiments
+from nofe_seismic.data.synthetic import make_synthetic_seismic_cube
+from nofe_seismic.experiments.evals import ExperimentConfig
+from nofe_seismic.experiments.suite import run_all_experiments
 
 
 def test_experiment_pipeline_smoke(tmp_path: Path) -> None:

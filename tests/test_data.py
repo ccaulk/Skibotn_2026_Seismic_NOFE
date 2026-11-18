@@ -4,13 +4,12 @@ from pathlib import Path
 
 import numpy as np
 
-from nofe_seismic.data import (
-    ATTRIBUTE_NAMES,
+from nofe_seismic.data.attributes import ATTRIBUTE_NAMES, extract_seismic_attributes
+from nofe_seismic.data.synthetic import make_synthetic_seismic_cube
+from nofe_seismic.data.volumes import (
     LazySeismicVolume,
     SeismicVolume,
-    extract_seismic_attributes,
     load_f3_directory,
-    make_synthetic_seismic_cube,
     volume_to_points,
 )
 

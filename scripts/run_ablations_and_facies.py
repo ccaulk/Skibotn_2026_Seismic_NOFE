@@ -5,8 +5,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from nofe_seismic.ablations_and_facies import run_ablation_and_facies_suite
-from nofe_seismic.data import load_f3_directory, make_synthetic_seismic_cube
+from nofe_seismic.data.synthetic import make_synthetic_seismic_cube
+from nofe_seismic.data.volumes import load_f3_directory
+from nofe_seismic.facies.suite import run_ablation_and_facies_suite
+from nofe_seismic.types import Stride2D, VolumeShape
 
 
 def parse_args() -> argparse.Namespace:
@@ -37,14 +39,16 @@ def main() -> None:
         volumes = load_f3_directory(args.data_dir)
         volume = volumes["full"] if "full" in volumes else next(iter(volumes.values()))
     else:
-        volume = make_synthetic_seismic_cube(shape=(36, 36, 48), seed=args.seed)
+        volume = make_synthetic_seismic_cube(
+            shape=VolumeShape(36, 36, 48), seed=args.seed
+        )
 
     summary = run_ablation_and_facies_suite(
         volume,
         out_dir=args.out_dir,
         device=args.device,
         seed=args.seed,
-        stride_2d=(args.stride_2d[0], args.stride_2d[1]),
+        stride_2d=Stride2D(args.stride_2d[0], args.stride_2d[1]),
         radius_2d=args.radius_2d,
         dims_2d=tuple(args.dims_2d),
         dims_3d=tuple(args.dims_3d),
@@ -53,11 +57,15 @@ def main() -> None:
     )
     summary_path = args.out_dir / "ablation_and_facies_summary.json"
     print(f"Saved ablation & facies summary to {summary_path}")
-    for key, val in summary["facies_breakthrough"].items():
-        print(
-            f"  {key}: bal_acc={val['lr_bal_acc']}, macro_f1={val['lr_macro_f1']}, "
-            f"knn={val['knn_acc']}, sil={val['silhouette']}"
-        )
+    breakthrough = summary["facies_breakthrough"]
+    if isinstance(breakthrough, dict):
+        for key, val in breakthrough.items():
+            if isinstance(val, dict):
+                print(
+                    f"  {key}: bal_acc={val['lr_bal_acc']}, "
+                    f"macro_f1={val['lr_macro_f1']}, "
+                    f"knn={val['knn_acc']}, sil={val['silhouette']}"
+                )
 
 
 if __name__ == "__main__":

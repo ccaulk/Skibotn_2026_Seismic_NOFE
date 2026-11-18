@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from typing import NamedTuple
 
 import numpy as np
 from sklearn.decomposition import PCA
@@ -11,6 +12,13 @@ from sklearn.manifold import TSNE
 from umap import UMAP
 
 _BARNES_HUT_MAX_DIM = 3
+
+
+class ProjectionResult(NamedTuple):
+    """Projected embedding array and elapsed fit/transform time."""
+
+    embedding: np.ndarray
+    elapsed_sec: float
 
 
 @dataclass(frozen=True)
@@ -24,11 +32,11 @@ class TsneResult:
 
 def run_pca(
     features: np.ndarray, *, out_dim: int = 3, seed: int = 42
-) -> tuple[np.ndarray, float]:
+) -> ProjectionResult:
     t0 = time.perf_counter()
     model = PCA(n_components=out_dim, random_state=seed)
     emb = model.fit_transform(features).astype(np.float32)
-    return emb, time.perf_counter() - t0
+    return ProjectionResult(embedding=emb, elapsed_sec=time.perf_counter() - t0)
 
 
 def run_umap(
@@ -38,7 +46,7 @@ def run_umap(
     n_neighbors: int = 15,
     min_dist: float = 0.1,
     seed: int = 42,
-) -> tuple[np.ndarray, float]:
+) -> ProjectionResult:
     t0 = time.perf_counter()
     model = UMAP(
         n_components=out_dim,
@@ -47,7 +55,7 @@ def run_umap(
         random_state=seed,
     )
     emb = model.fit_transform(features).astype(np.float32)
-    return emb, time.perf_counter() - t0
+    return ProjectionResult(embedding=emb, elapsed_sec=time.perf_counter() - t0)
 
 
 def run_tsne(

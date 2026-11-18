@@ -5,8 +5,8 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
-from nofe_seismic.data import make_synthetic_seismic_cube
-from nofe_seismic.hard_evals import run_hard_eval_suite
+from nofe_seismic.data.synthetic import make_synthetic_seismic_cube
+from nofe_seismic.hard_evals.suite import run_hard_eval_suite
 
 
 def test_run_hard_eval_suite_smoke(tmp_path: Path) -> None:

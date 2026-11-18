@@ -5,8 +5,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from nofe_seismic.data import load_f3_directory, make_synthetic_seismic_cube
-from nofe_seismic.hard_evals import run_hard_eval_suite
+from nofe_seismic.data.synthetic import make_synthetic_seismic_cube
+from nofe_seismic.data.volumes import load_f3_directory
+from nofe_seismic.hard_evals.suite import run_hard_eval_suite
+from nofe_seismic.types import Stride2D, VolumeShape
 
 
 def parse_args() -> argparse.Namespace:
@@ -80,14 +82,16 @@ def main() -> None:
         volumes = load_f3_directory(args.data_dir)
         volume = volumes["full"] if "full" in volumes else next(iter(volumes.values()))
     else:
-        volume = make_synthetic_seismic_cube(shape=(48, 48, 64), seed=args.seed)
+        volume = make_synthetic_seismic_cube(
+            shape=VolumeShape(48, 48, 64), seed=args.seed
+        )
 
     summary = run_hard_eval_suite(
         volume,
         out_dir=args.out_dir,
         device=args.device,
         seed=args.seed,
-        base_stride_2d=(args.stride_2d[0], args.stride_2d[1]),
+        base_stride_2d=Stride2D(args.stride_2d[0], args.stride_2d[1]),
         radius_2d=args.radius,
         epochs_2d=args.epochs_2d,
         epochs_3d=args.epochs_3d,

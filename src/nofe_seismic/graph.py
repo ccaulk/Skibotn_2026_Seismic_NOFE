@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, NamedTuple
 
 import numpy as np
 import torch
@@ -11,15 +12,34 @@ from nofe import NOFE, PointGraph
 from nofe.search import knn_edges, radius_edges
 from torch_geometric.data import Data
 
+from .types import NofeHyperparams, TrainedNofe
+
+
+class ScaledGraph(NamedTuple):
+    """Built PyG graph paired with its scaled feature and position arrays."""
+
+    graph: Data
+    features: np.ndarray
+    locations: np.ndarray
+
+
+class EdgeParameters(NamedTuple):
+    """Edge search parameters returned by ``PointGraph.edge_parameters``."""
+
+    radius: float
+    k: int
+
+
+class NeighbourPairs(NamedTuple):
+    """Directed ``(source, target)`` index arrays from neighbour search."""
+
+    src: np.ndarray
+    dst: np.ndarray
+
 
 @dataclass(frozen=True)
 class SharedStandardizer:
-    """Per-column z-score scaler fitted once and reused across train/eval graphs.
-
-    Keeping scaling outside ``PointGraph`` (with ``normalize=False``) ensures that
-    held-out slices, cropped subvolumes and dense vs. sampled graphs share the
-    exact same feature and spatial coordinate space.
-    """
+    """Per-column z-score scaler fitted once and reused across train/eval graphs."""
 
     feat_mean: np.ndarray
     feat_std: np.ndarray
@@ -103,15 +123,29 @@ class SeismicPointGraph(PointGraph):
         self.radius = float(radius)
         self.k = int(k)
 
-    def edge_parameters(self) -> tuple[float, int]:
-        return self.radius, self.k
+    def edge_parameters(self) -> EdgeParameters:
+        return EdgeParameters(self.radius, self.k)
 
     def neighbour_pairs(
         self, points: np.ndarray, radius: float, k: int
-    ) -> tuple[np.ndarray, np.ndarray]:
+    ) -> NeighbourPairs:
         if self.mode == "radius":
-            return radius_edges(points, radius)
-        return knn_edges(points, k)
+            src, dst = radius_edges(points, radius)
+            return NeighbourPairs(src, dst)
+        src, dst = knn_edges(points, k)
+        return NeighbourPairs(src, dst)
+
+
+def build_scaled_graph(
+    builder: SeismicPointGraph,
+    scaler: SharedStandardizer,
+    features: np.ndarray,
+    locations: np.ndarray,
+) -> ScaledGraph:
+    """Scale features and locations using ``scaler`` and construct a graph."""
+    x_s = scaler.transform_features(features)
+    p_s = scaler.transform_locations(locations)
+    return ScaledGraph(graph=builder.build(x_s, p_s), features=x_s, locations=p_s)
 
 
 def graph_num_nodes(data: Data) -> int:
@@ -172,6 +206,36 @@ def train_nofe(
         for row in history
         if isinstance(row, dict)
     ]
+
+
+def fit_and_embed_nofe(graph: Data, params: NofeHyperparams) -> TrainedNofe:
+    """Instantiate, train and embed a NOFE operator from ``NofeHyperparams``."""
+    t0 = time.perf_counter()
+    model = NOFE(
+        out_dim=params.out_dim,
+        width=params.width,
+        ker_width=params.ker_width,
+        depth=params.depth,
+        nystrom=params.nystrom,
+        chunk_size=params.chunk_size,
+        device=params.device,
+        seed=params.seed,
+    )
+    history = train_nofe(
+        model,
+        graph,
+        epochs=params.epochs,
+        patience=params.patience,
+        lr=params.lr,
+        seed=params.seed,
+    )
+    embedding = embed_numpy(model, graph)
+    return TrainedNofe(
+        model=model,
+        history=history,
+        train_embedding=embedding,
+        elapsed_sec=time.perf_counter() - t0,
+    )
 
 
 def coord_map_2d(locs: np.ndarray) -> dict[tuple[float, float], int]:

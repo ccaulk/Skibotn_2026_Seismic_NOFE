@@ -4,13 +4,13 @@ from pathlib import Path
 
 import numpy as np
 
-from nofe_seismic.data import make_synthetic_seismic_cube
-from nofe_seismic.depth_compression import (
+from nofe_seismic.data.synthetic import make_synthetic_seismic_cube
+from nofe_seismic.data.traces import extract_trace_logs
+from nofe_seismic.depth.compression import (
     DepthCompressionConfig,
-    extract_trace_logs,
     run_depth_compression,
 )
-from nofe_seismic.viz import plot_8d_projection_map
+from nofe_seismic.viz.summary import plot_8d_projection_map
 
 
 def test_extract_trace_logs_envelope_is_nonnegative() -> None:

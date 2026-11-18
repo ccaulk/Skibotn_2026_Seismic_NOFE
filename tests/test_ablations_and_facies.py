@@ -5,8 +5,8 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
-from nofe_seismic.ablations_and_facies import run_ablation_and_facies_suite
-from nofe_seismic.data import make_synthetic_seismic_cube
+from nofe_seismic.data.synthetic import make_synthetic_seismic_cube
+from nofe_seismic.facies.suite import run_ablation_and_facies_suite
 
 
 def test_ablation_and_facies_suite_smoke(tmp_path: Path) -> None:
@@ -41,9 +41,13 @@ def test_ablation_and_facies_suite_smoke(tmp_path: Path) -> None:
         assert p.exists(), f"Missing {p}"
         assert p.stat().st_size > 1024
 
-    assert len(summary["ablation_2d"]) >= 6
-    assert len(summary["ablation_3d_facies"]) >= 5
-    for row in summary["ablation_2d"]:
+    ab2d = summary["ablation_2d"]
+    ab3d = summary["ablation_3d_facies"]
+    assert isinstance(ab2d, list)
+    assert isinstance(ab3d, list)
+    assert len(ab2d) >= 6
+    assert len(ab3d) >= 5
+    for row in ab2d:
         assert math.isfinite(row["local_stress"])
-    for row in summary["ablation_3d_facies"]:
+    for row in ab3d:
         assert math.isfinite(row["lr_bal_acc"])
