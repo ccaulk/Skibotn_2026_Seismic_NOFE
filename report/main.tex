@@ -47,7 +47,7 @@
   \vspace{0.4em}
   \begin{itemize}
     \item \texttt{NOFE-8D} preserves local geometry and eliminates tile-stitching failure ($0.10$ vs.\ $1.33$ for \texttt{PCA-8D} and $1.49$ for \texttt{UMAP-8D}).
-    \item Maintains Pearson $r \ge 0.990$ across $9\times$--$36\times$ sampling-density shifts.
+    \item Maintains Pearson $r \ge 0.987$ across $9\times$--$36\times$ sampling-density shifts.
   \end{itemize}
 \end{frame}
 
@@ -56,8 +56,8 @@
   \includegraphics[width=\linewidth,height=0.58\textheight,keepaspectratio]{./solutions/fig1_depth_compression_8d_bars.png}
   \vspace{0.5em}
   \begin{itemize}
-    \item Lowest \textbf{local spatial stress} ($0.258$ vs.\ $0.374$ PCA, $0.791$ UMAP) and \textbf{global stress} ($0.236$).
-    \item Highest nonlinear depth-log reconstruction $R^2$ ($0.339$) with high neighbourhood continuity ($0.953$).
+    \item Lowest \textbf{local spatial stress} ($0.255$ vs.\ $0.374$ PCA, $0.791$ UMAP) and \textbf{global stress} ($0.232$).
+    \item Nonlinear depth-log reconstruction $R^2 = 0.306$ (matching \texttt{PCA-8D} $0.308$, above \texttt{UMAP-8D} $0.293$) with high neighbourhood continuity ($0.956$).
   \end{itemize}
 \end{frame}
 
@@ -66,8 +66,8 @@
   \includegraphics[width=\linewidth,height=0.58\textheight,keepaspectratio]{./solutions/fig2_operator_generalization.png}
   \vspace{0.5em}
   \begin{itemize}
-    \item \textbf{Patch stitching:} $0.137$ norm-RMSE vs.\ $>1.52$ for independent \texttt{PCA-8D} / \texttt{UMAP-8D} tiles.
-    \item \textbf{Zero-shot $9\times$ density transfer} ($3\times 3 \to 1\times 1$, mean degree $27.3 \to 248.1$): $r = 0.9949$.
+    \item \textbf{Patch stitching:} $0.127$ norm-RMSE vs.\ $>1.56$ for independent \texttt{PCA-8D} / \texttt{UMAP-8D} tiles.
+    \item \textbf{Zero-shot $9\times$ density transfer} ($3\times 3 \to 1\times 1$, mean degree $27.3 \to 248.1$): $r = 0.9951$.
   \end{itemize}
 \end{frame}
 
@@ -106,7 +106,7 @@
   \vspace{0.5em}
   \begin{itemize}
     \item $300 \times 450 = 135{,}000$ traces evaluated zero-shot at native $1\times 1$ spacing.
-    \item Embedding gradient $\|\nabla z\|$ sharpens salt-diapir flanks and facies boundaries (Boundary AUC $= 0.667$).
+    \item Embedding gradient $\|\nabla z\|$ sharpens salt-diapir flanks and facies boundaries (Boundary AUC $= 0.663$).
   \end{itemize}
 \end{frame}
 
